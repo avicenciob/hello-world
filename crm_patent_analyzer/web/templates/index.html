@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Patent Supply Chain Mapper</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-purple: #8b5cf6;
+            --border-color: #475569;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+        .app-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr 360px;
+            grid-template-rows: 64px 1fr;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 10;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Left Panel - Filters */
+        .left-panel {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .filter-section {
+            margin-bottom: 24px;
+        }
+        .material-list {
+            list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .material-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 13px;
+        }
+        .material-item:hover { background: var(--bg-card); }
+        .material-item.active { background: var(--accent-blue); color: white; }
+        .material-count {
+            background: var(--bg-card);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .material-item.active .material-count {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        /* Filter controls */
+        .filter-group { margin-bottom: 16px; }
+        .filter-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .filter-group select, .filter-group input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        .btn-outline:hover { background: var(--bg-card); }
+
+        /* Main Graph Area */
+        .graph-container {
+            position: relative;
+            overflow: hidden;
+        }
+        #supply-chain-graph {
+            width: 100%;
+            height: 100%;
+        }
+        .graph-controls {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 5;
+        }
+        .graph-btn {
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .graph-btn:hover { background: var(--bg-card); }
+
+        /* Legend */
+        .graph-legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            z-index: 5;
+        }
+        .legend-title {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* Right Panel - Details */
+        .right-panel {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+        }
+        .tab {
+            padding: 8px 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Patent Card */
+        .patent-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.2s;
+        }
+        .patent-card:hover { border-color: var(--accent-blue); }
+        .patent-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .patent-title a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+        .patent-title a:hover { color: var(--accent-blue); }
+        .patent-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .patent-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-good { background: rgba(16,185,129,0.2); color: var(--accent-green); }
+        .badge-manufacturing { background: rgba(245,158,11,0.2); color: var(--accent-amber); }
+        .badge-unknown { background: rgba(148,163,184,0.2); color: var(--text-secondary); }
+        .badge-substitution { background: rgba(244,63,94,0.2); color: var(--accent-rose); }
+        .confidence-bar {
+            height: 4px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: var(--accent-blue);
+            transition: width 0.3s;
+        }
+
+        /* Substitution card */
+        .substitution-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--accent-rose);
+        }
+        .sub-arrow {
+            color: var(--accent-rose);
+            font-weight: 700;
+            margin: 0 4px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-secondary);
+        }
+        .empty-state h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .empty-state p { font-size: 13px; line-height: 1.6; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 100;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .tooltip-title { font-weight: 600; margin-bottom: 4px; }
+        .tooltip-meta { color: var(--text-secondary); }
+
+        /* Search */
+        .search-box {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        .search-box input::placeholder { color: var(--text-secondary); }
+
+        /* Node styles in SVG */
+        .node circle {
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: r 0.2s;
+        }
+        .node:hover circle { stroke: white; stroke-width: 3px; }
+        .node text {
+            font-size: 10px;
+            fill: var(--text-secondary);
+            pointer-events: none;
+        }
+        .link {
+            stroke-opacity: 0.4;
+            fill: none;
+        }
+        .link:hover { stroke-opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Header -->
+        <header class="header">
+            <div>
+                <h1>CRM Patent Supply Chain Mapper</h1>
+                <span style="font-size:12px;color:var(--text-secondary)">
+                    EU Critical Raw Materials &mdash; Patent Intelligence
+                </span>
+            </div>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-patents">--</div>
+                    <div class="stat-label">Patents</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-materials">--</div>
+                    <div class="stat-label">Materials</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-links">--</div>
+                    <div class="stat-label">Supply Links</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-substitutions">--</div>
+                    <div class="stat-label">Substitutions</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Left Panel -->
+        <aside class="left-panel">
+            <div class="search-box">
+                <input type="text" id="material-search" placeholder="Search materials...">
+            </div>
+
+            <div class="filter-section">
+                <div class="panel-title">Critical Raw Materials</div>
+                <ul class="material-list" id="material-list">
+                    <li class="material-item active" data-material="">
+                        <span>All Materials</span>
+                        <span class="material-count" id="all-count">--</span>
+                    </li>
+                    {% for mat in materials %}
+                    <li class="material-item" data-material="{{ mat.name }}">
+                        <span>{{ mat.name }}{% if mat.symbol %} ({{ mat.symbol }}){% endif %}</span>
+                        <span class="material-count">--</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="filter-section">
+                <div class="panel-title">Filters</div>
+                <div class="filter-group">
+                    <label for="usage-filter">Usage Type</label>
+                    <select id="usage-filter">
+                        <option value="">All Types</option>
+                        <option value="good">Part of Good</option>
+                        <option value="manufacturing">Manufacturing Process</option>
+                        <option value="unknown">Unclassified</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="confidence-filter">Min. Confidence</label>
+                    <input type="range" id="confidence-filter" min="0" max="1" step="0.05" value="0">
+                    <span id="confidence-value" style="font-size:12px;color:var(--text-secondary)">0%</span>
+                </div>
+                <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+                <button class="btn btn-outline" onclick="resetFilters()">Reset</button>
+            </div>
+        </aside>
+
+        <!-- Main Graph -->
+        <main class="graph-container">
+            <div class="graph-controls">
+                <button class="graph-btn" onclick="zoomIn()">+ Zoom In</button>
+                <button class="graph-btn" onclick="zoomOut()">- Zoom Out</button>
+                <button class="graph-btn" onclick="resetZoom()">Reset View</button>
+                <button class="graph-btn" onclick="toggleLabels()">Toggle Labels</button>
+            </div>
+            <svg id="supply-chain-graph"></svg>
+            <div class="graph-legend">
+                <div class="legend-title">Node Type</div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--accent-green)"></div>
+                    <span>Part of Good</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--accent-amber)"></div>
+                    <span>Manufacturing Process</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:var(--text-secondary)"></div>
+                    <span>Unclassified</span>
+                </div>
+                <div class="legend-title" style="margin-top:12px">Edge Type</div>
+                <div class="legend-item">
+                    <div style="width:20px;height:2px;background:var(--accent-blue)"></div>
+                    <span>Material in Good</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width:20px;height:2px;background:var(--accent-purple)"></div>
+                    <span>Process Link</span>
+                </div>
+            </div>
+            <div class="tooltip" id="tooltip" style="display:none"></div>
+        </main>
+
+        <!-- Right Panel -->
+        <aside class="right-panel">
+            <div class="tabs">
+                <div class="tab active" data-tab="details" onclick="switchTab('details')">Details</div>
+                <div class="tab" data-tab="patents" onclick="switchTab('patents')">Patents</div>
+                <div class="tab" data-tab="substitutions" onclick="switchTab('substitutions')">Substitutions</div>
+            </div>
+
+            <div class="tab-content active" id="tab-details">
+                <div class="empty-state" id="detail-empty">
+                    <h3>Select a Node</h3>
+                    <p>Click on a patent node in the graph to view its details,
+                       supply chain connections, and material usage.</p>
+                </div>
+                <div id="detail-content" style="display:none"></div>
+            </div>
+
+            <div class="tab-content" id="tab-patents">
+                <div id="patents-list"></div>
+            </div>
+
+            <div class="tab-content" id="tab-substitutions">
+                <div id="substitutions-list"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+    // === State ===
+    let graphData = { nodes: [], edges: [] };
+    let simulation, svg, g, link, node, zoom;
+    let showLabels = true;
+    let selectedMaterial = '';
+    let selectedUsageType = '';
+    let minConfidence = 0;
+
+    // === Color Mapping ===
+    const usageColors = {
+        'good': '#10b981',
+        'manufacturing': '#f59e0b',
+        'unknown': '#94a3b8'
+    };
+    const linkColors = {
+        'material_in_good': '#3b82f6',
+        'material_in_process': '#8b5cf6',
+        'good_in_good': '#10b981',
+        'process_in_process': '#f59e0b'
+    };
+
+    // Unique colors per material for visual distinction
+    const materialColors = [
+        '#3b82f6','#10b981','#f59e0b','#f43f5e','#8b5cf6',
+        '#06b6d4','#ec4899','#14b8a6','#f97316','#6366f1',
+        '#84cc16','#a855f7','#22d3ee','#fb923c','#e879f9',
+    ];
+    const materialColorMap = {};
+
+    // === Initialize ===
+    document.addEventListener('DOMContentLoaded', () => {
+        loadStats();
+        loadMaterialCounts();
+        loadGraph();
+        loadPatents();
+        loadSubstitutions();
+        setupSearch();
+    });
+
+    function setupSearch() {
+        document.getElementById('material-search').addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            document.querySelectorAll('.material-item').forEach(item => {
+                const name = item.dataset.material?.toLowerCase() || 'all materials';
+                item.style.display = name.includes(q) || q === '' ? 'flex' : 'none';
+            });
+        });
+        document.getElementById('confidence-filter').addEventListener('input', (e) => {
+            document.getElementById('confidence-value').textContent =
+                Math.round(e.target.value * 100) + '%';
+        });
+    }
+
+    // === API Calls ===
+    async function loadStats() {
+        try {
+            const resp = await fetch('/api/stats');
+            const data = await resp.json();
+            document.getElementById('stat-patents').textContent =
+                data.total_patents.toLocaleString();
+            document.getElementById('stat-materials').textContent = data.total_materials;
+            document.getElementById('stat-links').textContent = data.total_supply_chain_links;
+            document.getElementById('stat-substitutions').textContent = data.total_substitutions;
+        } catch (e) {
+            console.error('Failed to load stats:', e);
+        }
+    }
+
+    async function loadMaterialCounts() {
+        try {
+            const resp = await fetch('/api/materials');
+            const materials = await resp.json();
+            let total = 0;
+            materials.forEach((mat, i) => {
+                materialColorMap[mat.name] = materialColors[i % materialColors.length];
+                total += mat.patent_count;
+                const item = document.querySelector(
+                    `.material-item[data-material="${mat.name}"]`
+                );
+                if (item) {
+                    item.querySelector('.material-count').textContent = mat.patent_count;
+                }
+            });
+            document.getElementById('all-count').textContent = total;
+        } catch (e) {
+            console.error('Failed to load material counts:', e);
+        }
+    }
+
+    async function loadGraph(material, usageType, minConf) {
+        try {
+            let url = '/api/graph?';
+            if (material) url += `material=${encodeURIComponent(material)}&`;
+            if (usageType) url += `usage_type=${usageType}&`;
+            if (minConf) url += `min_confidence=${minConf}&`;
+
+            const resp = await fetch(url);
+            graphData = await resp.json();
+            renderGraph();
+        } catch (e) {
+            console.error('Failed to load graph:', e);
+            renderEmptyGraph();
+        }
+    }
+
+    async function loadPatents() {
+        try {
+            let url = '/api/patents?per_page=50';
+            if (selectedMaterial) url += `&material=${encodeURIComponent(selectedMaterial)}`;
+            if (selectedUsageType) url += `&usage_type=${selectedUsageType}`;
+
+            const resp = await fetch(url);
+            const data = await resp.json();
+            renderPatents(data.patents);
+        } catch (e) {
+            console.error('Failed to load patents:', e);
+        }
+    }
+
+    async function loadSubstitutions() {
+        try {
+            const resp = await fetch('/api/substitutions');
+            const data = await resp.json();
+            renderSubstitutions(data);
+        } catch (e) {
+            console.error('Failed to load substitutions:', e);
+        }
+    }
+
+    // === Graph Rendering ===
+    function renderGraph() {
+        const container = document.querySelector('.graph-container');
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        d3.select('#supply-chain-graph').selectAll('*').remove();
+
+        svg = d3.select('#supply-chain-graph')
+            .attr('width', width)
+            .attr('height', height);
+
+        // Zoom behavior
+        zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        svg.call(zoom);
+
+        g = svg.append('g');
+
+        // Arrow markers for directed edges
+        svg.append('defs').selectAll('marker')
+            .data(['material_in_good','material_in_process','good_in_good','process_in_process'])
+            .join('marker')
+            .attr('id', d => `arrow-${d}`)
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 20)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', d => linkColors[d] || '#3b82f6');
+
+        if (graphData.nodes.length === 0) {
+            renderEmptyGraph();
+            return;
+        }
+
+        // Create edges
+        link = g.append('g')
+            .selectAll('line')
+            .data(graphData.edges)
+            .join('line')
+            .attr('class', 'link')
+            .attr('stroke', d => linkColors[d.link_type] || '#3b82f6')
+            .attr('stroke-width', d => Math.max(1, d.confidence * 3))
+            .attr('marker-end', d => `url(#arrow-${d.link_type})`)
+            .on('mouseover', showEdgeTooltip)
+            .on('mouseout', hideTooltip);
+
+        // Create nodes
+        node = g.append('g')
+            .selectAll('.node')
+            .data(graphData.nodes)
+            .join('g')
+            .attr('class', 'node')
+            .call(d3.drag()
+                .on('start', dragStarted)
+                .on('drag', dragged)
+                .on('end', dragEnded));
+
+        node.append('circle')
+            .attr('r', d => 6 + (d.confidence || 0) * 8)
+            .attr('fill', d => usageColors[d.usage_type] || '#94a3b8')
+            .attr('stroke', d => materialColorMap[d.material] || '#3b82f6')
+            .on('mouseover', showNodeTooltip)
+            .on('mouseout', hideTooltip)
+            .on('click', (event, d) => showPatentDetail(d));
+
+        if (showLabels) {
+            node.append('text')
+                .attr('dx', 14)
+                .attr('dy', 4)
+                .text(d => truncate(d.title, 30));
+        }
+
+        // Force simulation
+        simulation = d3.forceSimulation(graphData.nodes)
+            .force('link', d3.forceLink(graphData.edges)
+                .id(d => d.id)
+                .distance(100))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(20))
+            .on('tick', ticked);
+    }
+
+    function renderEmptyGraph() {
+        const container = document.querySelector('.graph-container');
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        svg = d3.select('#supply-chain-graph')
+            .attr('width', width)
+            .attr('height', height);
+
+        svg.selectAll('*').remove();
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2 - 20)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#94a3b8')
+            .attr('font-size', '18px')
+            .attr('font-weight', '600')
+            .text('No Supply Chain Data Yet');
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2 + 10)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#64748b')
+            .attr('font-size', '13px')
+            .text('Run the scanner to populate: python -m crm_patent_analyzer scan');
+    }
+
+    function ticked() {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    }
+
+    function dragStarted(event) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+    }
+    function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+    }
+    function dragEnded(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+    }
+
+    // === Tooltips ===
+    function showNodeTooltip(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.innerHTML = `
+            <div class="tooltip-title">${d.title}</div>
+            <div class="tooltip-meta">
+                <div>Patent: ${d.id}</div>
+                <div>Material: ${d.material}</div>
+                <div>Type: ${d.usage_type}</div>
+                <div>Confidence: ${Math.round((d.confidence||0)*100)}%</div>
+                ${d.assignee ? `<div>Assignee: ${d.assignee}</div>` : ''}
+            </div>
+        `;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (event.pageX + 15) + 'px';
+        tooltip.style.top = (event.pageY - 10) + 'px';
+    }
+
+    function showEdgeTooltip(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.innerHTML = `
+            <div class="tooltip-title">${d.description || d.link_type}</div>
+            <div class="tooltip-meta">
+                <div>From: ${d.source.id || d.source}</div>
+                <div>To: ${d.target.id || d.target}</div>
+                <div>Confidence: ${Math.round((d.confidence||0)*100)}%</div>
+            </div>
+        `;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (event.pageX + 15) + 'px';
+        tooltip.style.top = (event.pageY - 10) + 'px';
+    }
+
+    function hideTooltip() {
+        document.getElementById('tooltip').style.display = 'none';
+    }
+
+    // === Patent Detail ===
+    function showPatentDetail(d) {
+        document.getElementById('detail-empty').style.display = 'none';
+        const content = document.getElementById('detail-content');
+        content.style.display = 'block';
+
+        const badgeClass = d.usage_type === 'good' ? 'badge-good' :
+                          d.usage_type === 'manufacturing' ? 'badge-manufacturing' : 'badge-unknown';
+
+        content.innerHTML = `
+            <div class="patent-card" style="border-color:var(--accent-blue)">
+                <div class="patent-title">
+                    <a href="${d.url}" target="_blank" rel="noopener">${d.title}</a>
+                </div>
+                <div class="patent-meta">Patent ID: ${d.id}</div>
+                <div class="patent-meta">Material: <strong>${d.material}</strong></div>
+                ${d.assignee ? `<div class="patent-meta">Assignee: ${d.assignee}</div>` : ''}
+                ${d.publication_date ? `<div class="patent-meta">Published: ${d.publication_date}</div>` : ''}
+                <div style="margin-top:8px">
+                    <span class="patent-badge ${badgeClass}">${d.usage_type}</span>
+                </div>
+                ${d.usage_description ? `<p style="margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.6">${d.usage_description}</p>` : ''}
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width:${(d.confidence||0)*100}%"></div>
+                </div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">
+                    Confidence: ${Math.round((d.confidence||0)*100)}%
+                </div>
+            </div>
+            <div class="panel-title" style="margin-top:16px">Source</div>
+            <a href="${d.url}" target="_blank" rel="noopener"
+               style="color:var(--accent-blue);font-size:13px;text-decoration:none;word-break:break-all">
+                ${d.url}
+            </a>
+        `;
+        switchTab('details');
+    }
+
+    // === Patent List ===
+    function renderPatents(patents) {
+        const container = document.getElementById('patents-list');
+        if (!patents || patents.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h3>No Patents Found</h3>
+                    <p>Run the scanner to search for patents related to critical raw materials.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = patents.map(p => {
+            const badgeClass = p.usage_type === 'good' ? 'badge-good' :
+                              p.usage_type === 'manufacturing' ? 'badge-manufacturing' : 'badge-unknown';
+            return `
+                <div class="patent-card">
+                    <div class="patent-title">
+                        <a href="${p.url}" target="_blank" rel="noopener">${p.title}</a>
+                    </div>
+                    <div class="patent-meta">${p.patent_id} | ${p.material_name}</div>
+                    ${p.assignee ? `<div class="patent-meta">${p.assignee}</div>` : ''}
+                    <span class="patent-badge ${badgeClass}">${p.usage_type}</span>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width:${(p.confidence||0)*100}%"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // === Substitution List ===
+    function renderSubstitutions(data) {
+        const container = document.getElementById('substitutions-list');
+        const materials = Object.keys(data);
+
+        if (materials.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h3>No Substitutions Detected</h3>
+                    <p>Run the analyzer to detect material substitution attempts in patents.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        for (const material of materials) {
+            html += `<div class="panel-title" style="margin:16px 0 8px">${material}</div>`;
+            for (const sub of data[material]) {
+                html += `
+                    <div class="substitution-card">
+                        <div style="font-size:13px;font-weight:600;margin-bottom:4px">
+                            ${material} <span class="sub-arrow">&rarr;</span> ${sub.substitute}
+                        </div>
+                        <div class="patent-title" style="font-size:12px">
+                            <a href="${sub.patent_url}" target="_blank" rel="noopener">
+                                ${sub.patent_title}
+                            </a>
+                        </div>
+                        <span class="patent-badge ${sub.success_indicated ? 'badge-good' : 'badge-substitution'}">
+                            ${sub.success_indicated ? 'Successful' : 'Attempted'}
+                        </span>
+                    </div>
+                `;
+            }
+        }
+        container.innerHTML = html;
+    }
+
+    // === Filters ===
+    function applyFilters() {
+        selectedUsageType = document.getElementById('usage-filter').value;
+        minConfidence = parseFloat(document.getElementById('confidence-filter').value);
+        loadGraph(selectedMaterial, selectedUsageType, minConfidence);
+        loadPatents();
+    }
+
+    function resetFilters() {
+        selectedMaterial = '';
+        selectedUsageType = '';
+        minConfidence = 0;
+        document.getElementById('usage-filter').value = '';
+        document.getElementById('confidence-filter').value = 0;
+        document.getElementById('confidence-value').textContent = '0%';
+        document.querySelectorAll('.material-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.material === '');
+        });
+        loadGraph();
+        loadPatents();
+    }
+
+    // Material selection
+    document.getElementById('material-list').addEventListener('click', (e) => {
+        const item = e.target.closest('.material-item');
+        if (!item) return;
+
+        document.querySelectorAll('.material-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        selectedMaterial = item.dataset.material || '';
+        applyFilters();
+    });
+
+    // === Tabs ===
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.tab-content').forEach(tc => {
+            tc.classList.toggle('active', tc.id === `tab-${tabName}`);
+        });
+    }
+
+    // === Graph Controls ===
+    function zoomIn() {
+        svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+    }
+    function zoomOut() {
+        svg.transition().duration(300).call(zoom.scaleBy, 0.67);
+    }
+    function resetZoom() {
+        svg.transition().duration(300).call(
+            zoom.transform, d3.zoomIdentity
+        );
+    }
+    function toggleLabels() {
+        showLabels = !showLabels;
+        if (showLabels) {
+            node?.append('text').attr('dx', 14).attr('dy', 4)
+                .text(d => truncate(d.title, 30));
+        } else {
+            node?.selectAll('text').remove();
+        }
+    }
+
+    // === Utilities ===
+    function truncate(str, len) {
+        if (!str) return '';
+        return str.length > len ? str.substring(0, len) + '...' : str;
+    }
+    </script>
+</body>
+</html>

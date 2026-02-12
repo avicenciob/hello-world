@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crm-patent-analyzer"
+version = "1.0.0"
+description = "EU Critical Raw Materials Patent Supply Chain Mapper"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    "requests>=2.31.0",
+    "flask>=3.0.0",
+]
+
+[project.optional-dependencies]
+scheduler = ["apscheduler>=3.10.0"]
+all = [
+    "apscheduler>=3.10.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+crm-patent-analyzer = "crm_patent_analyzer.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["crm_patent_analyzer*"]
